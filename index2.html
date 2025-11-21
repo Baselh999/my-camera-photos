@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>كاميرا مباشرة - رفع تلقائي</title>
+  <style>
+    body {font-family: Tajawal,Arial;background:#000;color:#0f9;margin:0;padding:20px;text-align:center;}
+    video {width:95%;max-width:680px;border:5px solid #0f9;border-radius:20px;box-shadow:0 0 30px #0f9;margin:10px auto;display:block;}
+    #status {font-size:22px;margin:15px;color:#0ff;}
+    .info {font-size:18px;color:#0f0;margin:10px;}
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <h1 style="color:#0ff;text-shadow:0 0 15px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
+  <video id="video" autoplay playsinline muted></video>
+  <div id="status">جاري تشغيل الكاميرا...</div>
+  <div class="info">صورة كل 5 ثواني • فيديو كل 5 دقايق</div>
+
+  <script>
+    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+    // ضع توكنك هنا مرة واحدة فقط (آمن تمامًا لأن المستودع خاص أو عام حسب رغبتك)
+    const TOKEN = "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";
+    const REPO = "Baselh999/my-camera-photos";
+    const FOLDER = "photos";   // الصور والفيديوهات كلها هنا
+    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+    let mediaRecorder;
+    let recordedChunks = [];
+
+    // تشغيل الكاميرا (خلفية في الموبايل)
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true })
+      .then(stream => {
+        video.srcObject = stream;
+        status.textContent = "الكاميرا شغالة ✅ يتم الرفع تلقائيًا...";
+
+        // صورة كل 5 ثواني
+        setInterval(capturePhoto, 5000);
+
+        // فيديو كل 5 دقايق (300 ثانية)
+        startRecording(stream);
+        setInterval(() => {
+          stopRecordingAndUpload();
+          setTimeout(() => startRecording(stream), 3000);
+        }, 5*60*1000); // كل 5 دقايق
+      })
+      .catch(err => status.innerHTML = `<span style="color:red;">خطأ الكاميرا: ${err.message}</span>`);
+
+    // التقاط صورة
+    function capturePhoto() {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      canvas.toBlob(blob => uploadFile(blob, `صورة_${new Date().toISOString().replace(/[:.]/g,"-")}.jpg`), 'image/jpeg', 0.9);
+    }
+
+    // بدء التسجيل
+    function startRecording(stream) {
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.start();
+    }
+
+    // إيقاف ورفع الفيديو
+    function stopRecordingAndUpload() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          uploadFile(blob, `فيديو_${new Date().toISOString().replace(/[:.]/g,"-")}.webm`);
+          recordedChunks = [];
+        };
+      }
+    }
+
+    // رفع أي ملف (صورة أو فيديو)
+    async function uploadFile(blob, filename) {
+      const path = `${FOLDER}/${filename}`;
+      const base64 = await blobToBase64(blob).then(res => res.split(',')[1]);
+
+      fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, {
+        method: "PUT",
+        headers: { Authorization: `token ${TOKEN}`, Accept: "application/vnd.github.v3+json" },
+        body: JSON.stringify({
+          message: `رفع تلقائي ${filename}`,
+          content: base64,
+          branch: "master"   // تأكد إنه master مش main
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.content) {
+          status.innerHTML = `تم رفع: <a href="${data.content.html_url}" target="_blank" style="color:#0ff;">${filename}</a>`;
+        }
+      })
+      .catch(err => console.error("خطأ رفع:", err));
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    }
+  </script>
+</body>
+</html>
