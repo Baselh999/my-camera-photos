@@ -1,32 +1,34 @@
-name: Upload from Camera
+name: Upload Camera Files
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: '*/5 * * * *'  # كل 5 دقايق (اختياري)
+  repository_dispatch:
+    types: [camera-upload]
+  workflow_dispatch:  # عشان تقدر تشغّله يدويًا أول مرة
 
 jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
-      - name: Receive file
-        uses: actions/upload-artifact@v4
+      - name: Download artifact from client
+        uses: actions/download-artifact@v4
         with:
           name: camera-files
           path: /tmp/camera/
-          retention-days: 1
-      - name: Upload to repo
+
+      - name: Upload files to repo
         env:
           TOKEN: ${{ secrets.CAMERA_TOKEN }}
         run: |
-          mkdir -p photos
-          cd /tmp/camera || exit
+          cd /tmp/camera/ || exit 1
           for file in *; do
-            [ -f "$file" ] || continue
-            base64_file=$(base64 -w 0 "$file")
-            curl -s -X PUT \
-              -H "Authorization: token $TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/Baselh999/my-camera-photos/contents/photos/$file \
-              -d "{\"message\":\"رفع تلقائي\",\"content\":\"$base64_file\",\"branch\":\"master\"}"
+            if [ -f "$file" ]; then
+              echo "Uploading $file..."
+              base64_content=$(base64 -w 0 "$file")
+              curl -s -X PUT \
+                -H "Authorization: token $TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                -d "{\"message\":\"رفع تلقائي $file\",\"content\":\"$base64_content\",\"branch\":\"master\"}" \
+                "https://api.github.com/repos/Baselh999/my-camera-photos/contents/photos/$file"
+              echo "Uploaded $file"
+            fi
           done
