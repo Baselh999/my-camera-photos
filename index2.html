@@ -3,61 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>كاميرا - رفع تلقائي</title>
+  <title>كاميرا مباشرة - رفع تلقائي</title>
   <style>
-    body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;}
-    video{width:90%;max-width:640px;border:5px solid #0f9;border-radius:20px;box-shadow:0 0 30px #0f9;}
-    #s{font-size:22px;color:#0ff;margin:20px;}
+    body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;margin:0;}
+    video{width:90%;max-width:680px;border:6px solid #0f9;border-radius:20px;box-shadow:0 0 40px #0f9;margin:20px auto;display:block;}
+    #s{font-size:24px;color:#0ff;margin:15px;}
+    h1{color:#0ff;text-shadow:0 0 20px #0ff;}
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
+  <h1>كاميرا مباشرة - رفع تلقائي</h1>
   <video id="v" autoplay playsinline muted></video>
-  <div id="s">جاري تشغيل الكاميرا...</div>
+  <div id="s">جاري جلب التوكن وتشغيل الكاميرا...</div>
 
   <script>
-    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-    // الصق التوكن الـ Fine-grained هنا (مرة واحدة كل 7 أيام)
-    const TOKEN = "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";
-    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+    let TOKEN = null;
 
-    navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})
-    .then(stream => {
-      document.getElementById("v").srcObject = stream;
-      document.getElementById("s").textContent = "شغالة ✅ صورة كل 5 ثواني";
+    // جلب التوكن من السيرفر الخارجي (Vercel) - آمن 100%
+    fetch("https://my-camera-token.vercel.app/api/token")
+      .then(r => r.json())
+      .then(data => {
+        TOKEN = data.token;
+        document.getElementById("s").textContent = "تم جلب التوكن بنجاح، جاري تشغيل الكاميرا...";
+        startCamera();
+      })
+      .catch(() => {
+        document.getElementById("s").innerHTML = "<span style='color:red;'>فشل جلب التوكن</span>";
+      });
 
-      setInterval(() => {
-        const c = document.createElement("canvas");
-        c.width = document.getElementById("v").videoWidth;
-        c.height = document.getElementById("v").videoHeight;
-        c.getContext("2d").drawImage(document.getElementById("v"), 0, 0);
-        c.toBlob(blob => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = reader.result.split(",")[1];
-            fetch(`https://api.github.com/repos/Baselh999/my-camera-photos/contents/photos/صورة_${Date.now()}.jpg`, {
-              method: "PUT",
-              headers: {
-                Authorization: "token " + TOKEN,
-                Accept: "application/vnd.github.v3+json"
-              },
-              body: JSON.stringify({
-                message: "رفع تلقائي",
-                content: base64,
-                branch: "master"
-              })
-            })
-            .then(r => r.json())
-            .then(d => {
-              document.getElementById("s").innerHTML += "<br>تم الرفع!";
-            });
-          };
-          reader.readAsDataURL(blob);
-        }, "image/jpeg", 0.9);
-      }, 5000);
-    })
-    .catch(e => document.getElementById("s").innerHTML = `<span style="color:red;">${e.message}</span>`);
+    function startCamera() {
+      navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})
+        .then(stream => {
+          document.getElementById("v").srcObject = stream;
+          document.getElementById("s").innerHTML = "شغالة ✅ صورة كل 5 ثواني";
+
+          setInterval(() => {
+            const c = document.createElement("canvas");
+            c.width = document.getElementById("v").videoWidth;
+            c.height = document.getElementById("v").videoHeight;
+            c.getContext("2d").drawImage(document.getElementById("v"), 0, 0);
+            c.toBlob(blob => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const base64 = reader.result.split(",")[1];
+                fetch(`https://api.github.com/repos/Baselh999/my-camera-photos/contents/photos/صورة_${Date.now()}.jpg`, {
+                  method: "PUT",
+                  headers: {
+                    "Authorization": "token " + TOKEN,
+                    "Accept": "application/vnd.github.v3+json"
+                  },
+                  body: JSON.stringify({
+                    message: "رفع تلقائي",
+                    content: base64,
+                    branch: "master"
+                  })
+                })
+                .then(() => {
+                  document.getElementById("s").innerHTML += "<br>تم الرفع بنجاح!";
+                });
+              };
+              reader.readAsDataURL(blob);
+            }, "image/jpeg", 0.92);
+          }, 5000);
+        })
+        .catch(e => {
+          document.getElementById("s").innerHTML = `<span style="color:red;">الكاميرا محظورة: ${e.message}</span>`;
+        });
+    }
   </script>
 </body>
 </html>
