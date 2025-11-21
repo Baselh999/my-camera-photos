@@ -21,7 +21,7 @@
     let TOKEN = null;
 
     // جلب التوكن من السيرفر الخارجي (Vercel) - آمن 100%
-    fetch("https://my-camera-token.vercel.app/api/token")
+    fetch("http://127.0.0.1:5555/api.js")
       .then(r => r.json())
       .then(data => {
         TOKEN = data.token;
