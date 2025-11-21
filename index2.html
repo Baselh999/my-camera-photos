@@ -18,89 +18,93 @@
   <div id="status">جاري تشغيل الكاميرا...</div>
   <div class="info">صورة كل 5 ثواني • فيديو كل 5 دقايق</div>
 
-  <script>
-  const TOKEN = "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";
-  const REPO = "Baselh999/my-camera-photos";
-  const FOLDER = "photos";
+ <script>
+// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+// أنشئ توكن كلاسيك جديد من هنا: https://github.com/settings/tokens/new?scopes=repo
+const TOKEN = "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"; // ← ضع التوكن الجديد هنا
+// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+const REPO = "Baselh999/my-camera-photos";
+const FOLDER = "photos";
 
-  const video = document.getElementById('video');
-  const status = document.getElementById('status');
-  let mediaRecorder;
-  let recordedChunks = [];
+const video = document.getElementById('video');
+const status = document.getElementById('status');
 
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true })
-    .then(stream => {
-      video.srcObject = stream;
-      status.textContent = "الكاميرا شغالة ✅ يتم الرفع تلقائيًا...";
+status.textContent = "جاري التحقق...";
 
-      // صورة كل 5 ثواني
-      setInterval(capturePhoto, 5000);
+fetch(`https://api.github.com/repos/${REPO}`, {
+  headers: { Authorization: `token ${TOKEN}` }
+})
+.then(r => r.ok ? r.json() : Promise.reject("توكن غلط"))
+.then(() => {
+  status.textContent = "التوكن تمام ✅ جاري تشغيل الكاميرا...";
+  startCamera();
+})
+.catch(err => {
+  status.innerHTML = `<span style="color:red;">خطأ: التوكن غلط أو منتهي<br>أنشئ توكن جديد (repo) وحطه في الكود</span>`;
+});
 
-      // فيديو كل 5 دقايق
-      startRecording(stream);
-      setInterval(() => {
-        stopRecordingAndUpload();
-        setTimeout(() => startRecording(stream), 2000);
-      }, 5*60*1000);
-    })
-    .catch(err => status.innerHTML = `<span style="color:red;">خطأ: ${err.message}</span>`);
+function startCamera() {
+  navigator.mediaDevices.getUserMedia({ 
+    video: { facingMode: "environment" }, 
+    audio: false   // خليناه بدون صوت عشان يشتغل أسرع
+  })
+  .then(stream => {
+    video.srcObject = stream;
+    status.textContent = "الكاميرا شغالة ✅ يتم الرفع تلقائيًا";
 
-  function capturePhoto() {
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    canvas.toBlob(blob => uploadFile(blob, `صورة_${new Date().toISOString().replace(/[:.]/g,"-")}.jpg`), 'image/jpeg', 0.9);
-  }
+    // صورة كل 5 ثواني
+    setInterval(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      canvas.toBlob(blob => upload(blob, `صورة_${Date.now()}.jpg`), 'image/jpeg', 0.85);
+    }, 5000);
 
-  function startRecording(stream) {
-    recordedChunks = [];
-    const options = { mimeType: 'video/webm;codecs=vp8,opus' };  // ← vp8 مدعوم في كل مكان
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options mimeType = 'video/webm';
-    }
-    mediaRecorder = new MediaRecorder(stream, options);
-    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.start();
-  }
-
-  function stopRecordingAndUpload() {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-        uploadFile(blob, `فيديو_${new Date().toISOString().replace(/[:.]/g,"-")}.webm`);
-        recordedChunks = [];
+    // فيديو كل 5 دقايق
+    let recorder;
+    const startRec = () => {
+      const stream = video.srcObject;
+      recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+      const chunks = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'WebM' });
+        upload(blob, `فيديو_${Date.now()}.webm`);
       };
-    }
-  }
+      recorder.start();
+    };
+    startRec();
+    setInterval(() => { recorder.stop(); setTimeout(startRec, 2000); }, 5*60*1000);
+  })
+  .catch(err => status.innerHTML = `<span style="color:red;">الكاميرا محظورة: ${err.message}<br>اضغط "السماح" في الأعلى</span>`);
+}
 
-  async function uploadFile(blob, filename) {
-    const path = `${FOLDER}/${filename}`;
-    const base64 = await new Promise(r => {
-      const reader = new FileReader();
-      reader.onload = () => r(reader.result.split(',')[1]);
-      reader.readAsDataURL(blob);
-    });
+async function upload(blob, name) {
+  const path = `${FOLDER}/${name}`;
+  const base64 = await new Promise(r => {
+    const reader = new FileReader();
+    reader.onload = () => r(reader.result.split(',')[1]);
+    reader.readAsDataURL(blob);
+  });
 
-    fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, {
-      method: "PUT",
-      headers: { Authorization: `token ${TOKEN}`, Accept: "application/vnd.github.v3+json" },
-      headers: { Authorization: `token ${TOKEN}` },
-      body: JSON.stringify({
-        message: `رفع تلقائي ${filename}`,
-        content: base64,
-        branch: "master"
-      })
+  fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `token ${TOKEN}`,
+      Accept: "application/vnd.github.v3+json"
+    },
+    body: JSON.stringify({
+      message: "رفع تلقائي",
+      content: base64,
+      branch: "master"
     })
-    .then(res => res.json())
-    .then(data => {
-      if (data.content) {
-        status.innerHTML = `تم رفع: <a href="${data.content.html_url}" target="_blank" style="color:#0ff;">${filename}</a>`;
-      }
-    })
-    .catch(err => console.error(err));
-  }
-</script>
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.content) status.innerHTML += `<br>تم رفع: <a href="${d.content.html_url}" style="color:#0ff">${name}</a>`;
+  });
+}
+ </script>
 </body>
 </html>
