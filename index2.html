@@ -3,108 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>كاميرا مباشرة - رفع تلقائي</title>
+  <title>كاميرا مباشرة</title>
   <style>
-    body {font-family: Tajawal,Arial;background:#000;color:#0f9;margin:0;padding:20px;text-align:center;}
-    video {width:95%;max-width:680px;border:5px solid #0f9;border-radius:20px;box-shadow:0 0 30px #0f9;margin:10px auto;display:block;}
-    #status {font-size:22px;margin:15px;color:#0ff;}
-    .info {font-size:18px;color:#0f0;margin:10px;}
+    body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;}
+    video{width:95%;max-width:680px;border:6px solid #0f9;border-radius:20px;box-shadow:0 0 40px #0f9;}
+    #s{font-size:22px;color:#0ff;margin:15px;}
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1 style="color:#0ff;text-shadow:0 0 15px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
-  <video id="video" autoplay playsinline muted></video>
-  <div id="status">جاري تشغيل الكاميرا...</div>
-  <div class="info">صورة كل 5 ثواني • فيديو كل 5 دقايق</div>
+  <h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
+  <video id="v" autoplay playsinline></video>
+  <div id="s">جاري تشغيل الكاميرا...</div>
 
- <script>
-// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-// أنشئ توكن كلاسيك جديد من هنا: https://github.com/settings/tokens/new?scopes=repo
-const TOKEN = "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"; // ← ضع التوكن الجديد هنا
-// ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-const REPO = "Baselh999/my-camera-photos";
-const FOLDER = "photos";
+  <script>
+    const v = document.getElementById('v');
+    const s = document.getElementById('s');
+    navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}, audio:false})
+    .then(stream => {
+      v.srcObject = stream;
+      s.textContent = "شغالة ✅ صورة كل 5 ثواني + فيديو كل 5 دقايق";
 
-const video = document.getElementById('video');
-const status = document.getElementById('status');
+      // صورة كل 5 ثواني
+      setInterval(() => {
+        const c = document.createElement('canvas');
+        c.width = v.videoWidth; c.height = v.videoHeight;
+        c.getContext('2d').drawImage(v,0,0);
+        c.toBlob(b => send(b, `صورة_${Date.now()}.jpg`));
+      }, 5000);
 
-status.textContent = "جاري التحقق...";
-
-fetch(`https://api.github.com/repos/${REPO}`, {
-  headers: { Authorization: `token ${TOKEN}` }
-})
-.then(r => r.ok ? r.json() : Promise.reject("توكن غلط"))
-.then(() => {
-  status.textContent = "التوكن تمام ✅ جاري تشغيل الكاميرا...";
-  startCamera();
-})
-.catch(err => {
-  status.innerHTML = `<span style="color:red;">خطأ: التوكن غلط أو منتهي<br>أنشئ توكن جديد (repo) وحطه في الكود</span>`;
-});
-
-function startCamera() {
-  navigator.mediaDevices.getUserMedia({ 
-    video: { facingMode: "environment" }, 
-    audio: false   // خليناه بدون صوت عشان يشتغل أسرع
-  })
-  .then(stream => {
-    video.srcObject = stream;
-    status.textContent = "الكاميرا شغالة ✅ يتم الرفع تلقائيًا";
-
-    // صورة كل 5 ثواني
-    setInterval(() => {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-      canvas.toBlob(blob => upload(blob, `صورة_${Date.now()}.jpg`), 'image/jpeg', 0.85);
-    }, 5000);
-
-    // فيديو كل 5 دقايق
-    let recorder;
-    const startRec = () => {
-      const stream = video.srcObject;
-      recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
-      const chunks = [];
-      recorder.ondataavailable = e => chunks.push(e.data);
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'WebM' });
-        upload(blob, `فيديو_${Date.now()}.webm`);
+      // فيديو كل 5 دقايق
+      let r, chunks=[];
+      const start = () => {
+        chunks=[];
+        r = new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp8'});
+        r.ondataavailable = e => chunks.push(e.data);
+        r.onstop = () => send(new Blob(chunks,{type:'video/webm'}), `فيديو_${Date.now()}.webm`);
+        r.start();
       };
-      recorder.start();
-    };
-    startRec();
-    setInterval(() => { recorder.stop(); setTimeout(startRec, 2000); }, 5*60*1000);
-  })
-  .catch(err => status.innerHTML = `<span style="color:red;">الكاميرا محظورة: ${err.message}<br>اضغط "السماح" في الأعلى</span>`);
-}
-
-async function upload(blob, name) {
-  const path = `${FOLDER}/${name}`;
-  const base64 = await new Promise(r => {
-    const reader = new FileReader();
-    reader.onload = () => r(reader.result.split(',')[1]);
-    reader.readAsDataURL(blob);
-  });
-
-  fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `token ${TOKEN}`,
-      Accept: "application/vnd.github.v3+json"
-    },
-    body: JSON.stringify({
-      message: "رفع تلقائي",
-      content: base64,
-      branch: "master"
+      start();
+      setInterval(() => { r.stop(); setTimeout(start,2000); }, 5*60*1000);
     })
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.content) status.innerHTML += `<br>تم رفع: <a href="${d.content.html_url}" style="color:#0ff">${name}</a>`;
-  });
-}
- </script>
+    .catch(e=>s.innerHTML=`<span style="color:red;">الكاميرا محظورة: ${e.message}</span>`);
+
+    function send(blob, name) {
+      const fd = new FormData();
+      fd.append('file', blob, name);
+      fetch('https://api.github.com/repos/Baselh999/my-camera-photos/uploads', {method:'POST',body:fd});
+      s.innerHTML += `<br>تم رفع ${name}`;
+    }
+  </script>
 </body>
 </html>
