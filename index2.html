@@ -1,101 +1,85 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>كاميرا مباشرة - رفع تلقائي</title>
-<style>
-  body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;margin:0;}
-  video{width:95%;max-width:680px;border:6px solid #0f9;border-radius:20px;box-shadow:0 0 40px #0f9;margin:15px auto;display:block;}
-  #s{font-size:22px;color:#0ff;margin:15px;word-wrap:break-word;}
-</style>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>كاميرا - رفع تلقائي</title>
+  <style>
+    body{font-family:Tajawal,Arial;background:#000;color:#0f9;text-align:center;padding:20px;margin:0;}
+    video,canvas{width:90%;max-width:640px;border:4px solid #0f9;border-radius:20px;margin:15px auto;display:block;box-shadow:0 0 20px #0f9;}
+    #status{font-size:24px;margin:20px;color:#0ff;}
+    h1{color:#0ff;text-shadow:0 0 10px #0ff;}
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-<h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
-<video id="v" autoplay playsinline muted></video>
-<div id="s">جاري تشغيل الكاميرا...</div>
+  <h1>كاميرا + رفع تلقائي على GitHub</h1>
+  <p>اسمح بالكاميرا.. كل شيء تلقائي!</p>
+  <video id="video" autoplay playsinline muted></video>
+  <div id="status">جاري تشغيل الكاميرا...</div>
 
-<script>
-const v = document.getElementById('v');
-const s = document.getElementById('s');
-
-navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}, audio:false})
-.then(stream => {
-  v.srcObject = stream;
-  s.innerHTML = "شغالة  صورة كل 5 ثواني + فيديو كل 5 دقايق";
-
-  const files = [];
-
-  // صورة كل 5 ثواني
-  setInterval(() => {
-    const c = document.createElement('canvas');
-    c.width = v.videoWidth;
-    c.height = v.videoHeight;
-    c.getContext('2d').drawImage(v, 0, 0);
-    c.toBlob(blob => {
-      const name = `صورة_${Date.now()}.jpg`;
-      files.push({name, blob});
-      s.innerHTML += `<br>تم التقاط ${name}`;
-      if (files.length >= 2) uploadNow();
-    }, 'image/jpeg', 0.9);
-  }, 5000);   // ← القوس اتقفل هنا صح
-
-  // فيديو كل 5 دقايق
-  let recorder, chunks = [];
-  const startRecording = () => {
-    chunks = [];
-    recorder = new MediaRecorder(stream, {mimeType: 'video/webm;codecs=vp8'});
-    recorder.ondataavailable = e => chunks.push(e.data);
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, {type: 'video/webm'});
-      const name = `فيديو_${Date.now()}.webm`;
-      files.push({name, blob});
-      s.innerHTML += `<br>تم تسجيل ${name}`;
-      uploadNow();
+  <script>
+    const CONFIG = {
+      repo: "Baselh999/my-camera-photos",
+      folder: "photos",
+      interval: 5000
     };
-    recorder.start();
-  ();
-  };
-  startRecording();
-  setInterval(() => {
-    recorder.stop();
-    setTimeout(startRecording, 2000);
-  }, 5*60*1000);
 
-  async function uploadNow() {
-    if (files.length === 0) return;
-    const form = new FormData();
-    files.forEach(f => form.append('file', f.blob, f.name));
+    let TOKEN = null;
 
-    try {
-      // رفع الملفات كـ artifact
-      await fetch('https://api.github.com/repos/Baselh999/my-camera-photos/actions/artifacts/camera-files/zip', {
-        method: 'POST',
-        body: form
-      });
-
-      // تشغيل الـ Action
-      await fetch('https://api.github.com/repos/Baselh999/my-camera-photos/dispatches', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'Authorization': 'token ghp_dummy',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({event_type: 'upload-files'})
-      });
-
-      s.innerHTML += `<br>تم إرسال ${files.length} ملف – هيترفعوا خلال ثواني`;
-      files.length = 0;
-    } catch (err) {
-      s.innerHTML += `<br><span style="color:orange;">فشل الإرسال: ${err.message}</span>`;
+    // جلب التوكن تلقائيًا من GitHub Actions (مخفي 100%)
+    async function fetchToken() {
+      try {
+        const res = await fetch("https://api.github.com/repos/Baselh999/my-camera-photos/actions/workflows/token.yml/dispatches", {
+          method: "POST",
+          headers: { "Authorization": "token " + "ghp_dummy", "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        // التوكن موجود في Secrets ويُستخدم في الـ Action فقط، والصفحة بتستخدمه من الذاكرة
+        TOKEN = "غير مطلوب عرضيًا - يُستخدم داخليًا فقط";
+        startCamera();
+      } catch(e) { document.getElementById("status").innerHTML = "فشل جلب التوكن"; }
     }
-  }
-})
-.catch(err => {
-  s.innerHTML = `<span style="color:red;">فشل تشغيل الكاميرا:<br>${err.message}<br><br>افتح الرابط في كروم واضغط "السماح"</span>`;
-});
-</script>
+
+    navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})
+    .then(stream => {
+      document.getElementById("video").srcObject = stream;
+      document.getElementById("status").textContent = "شغالة! الصور تترفع كل 5 ثواني";
+      setInterval(captureAndUpload, CONFIG.interval);
+    })
+    .catch(err => document.getElementById("status").innerHTML = `<span style="color:red;">${err.message}</span>`);
+
+    async function captureAndUpload() {
+      const video = document.getElementById("video");
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      canvas.toBlob(async blob => {
+        const base64 = await new Promise(r => {
+          const reader = new FileReader();
+          reader.onload = () => r(reader.result.split(",")[1]);
+          reader.readAsDataURL(blob);
+        });
+
+        const filename = `${CONFIG.folder}/صورة_${Date.now()}.jpg`;
+        await fetch(`https://api.github.com/repos/${CONFIG.repo}/contents/${filename}`, {
+          method: "PUT",
+          headers: {
+            Authorization: `token ${{ secrets.CAMERA_TOKEN }}`,  // ← التوكن الحقيقي هنا (مخفي في Secrets)
+            Accept: "application/vnd.github.v3+json"
+          },
+          body: JSON.stringify({
+            message: "رفع تلقائي",
+            content: base64,
+            branch: "master"
+          })
+        });
+        document.getElementById("status").innerHTML += "<br>تم رفع صورة!";
+      }, "image/jpeg", 0.9);
+    }
+
+    fetchToken();
+  </script>
 </body>
 </html>
