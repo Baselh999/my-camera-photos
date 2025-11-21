@@ -5,81 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>كاميرا - رفع تلقائي</title>
   <style>
-    body{font-family:Tajawal,Arial;background:#000;color:#0f9;text-align:center;padding:20px;margin:0;}
-    video,canvas{width:90%;max-width:640px;border:4px solid #0f9;border-radius:20px;margin:15px auto;display:block;box-shadow:0 0 20px #0f9;}
-    #status{font-size:24px;margin:20px;color:#0ff;}
-    h1{color:#0ff;text-shadow:0 0 10px #0ff;}
+    body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;}
+    video{width:90%;max-width:640px;border:5px solid #0f9;border-radius:20px;box-shadow:0 0 30px #0f9;}
+    #s{font-size:22px;color:#0ff;margin:20px;}
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1>كاميرا + رفع تلقائي على GitHub</h1>
-  <p>اسمح بالكاميرا.. كل شيء تلقائي!</p>
-  <video id="video" autoplay playsinline muted></video>
-  <div id="status">جاري تشغيل الكاميرا...</div>
+  <h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
+  <video id="v" autoplay playsinline muted></video>
+  <div id="s">جاري تشغيل الكاميرا...</div>
 
   <script>
-    const CONFIG = {
-      repo: "Baselh999/my-camera-photos",
-      folder: "photos",
-      interval: 5000
-    };
-
-    let TOKEN = null;
-
-    // جلب التوكن تلقائيًا من GitHub Actions (مخفي 100%)
-    async function fetchToken() {
-      try {
-        const res = await fetch("https://api.github.com/repos/Baselh999/my-camera-photos/actions/workflows/token.yml/dispatches", {
-          method: "POST",
-          headers: { "Authorization": "token " + "ghp_dummy", "Content-Type": "application/json" },
-          body: JSON.stringify({})
-        });
-        // التوكن موجود في Secrets ويُستخدم في الـ Action فقط، والصفحة بتستخدمه من الذاكرة
-        TOKEN = "غير مطلوب عرضيًا - يُستخدم داخليًا فقط";
-        startCamera();
-      } catch(e) { document.getElementById("status").innerHTML = "فشل جلب التوكن"; }
-    }
+    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+    // الصق التوكن الـ Fine-grained هنا (مرة واحدة كل 7 أيام)
+    const TOKEN = "github_pat_11AABCDEFghijklmnopQRstuVWXYZ1234567890abcdefghi";
+    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 
     navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})
     .then(stream => {
-      document.getElementById("video").srcObject = stream;
-      document.getElementById("status").textContent = "شغالة! الصور تترفع كل 5 ثواني";
-      setInterval(captureAndUpload, CONFIG.interval);
-    })
-    .catch(err => document.getElementById("status").innerHTML = `<span style="color:red;">${err.message}</span>`);
+      document.getElementById("v").srcObject = stream;
+      document.getElementById("s").textContent = "شغالة ✅ صورة كل 5 ثواني";
 
-    async function captureAndUpload() {
-      const video = document.getElementById("video");
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d").drawImage(video, 0, 0);
-      canvas.toBlob(async blob => {
-        const base64 = await new Promise(r => {
+      setInterval(() => {
+        const c = document.createElement("canvas");
+        c.width = document.getElementById("v").videoWidth;
+        c.height = document.getElementById("v").videoHeight;
+        c.getContext("2d").drawImage(document.getElementById("v"), 0, 0);
+        c.toBlob(blob => {
           const reader = new FileReader();
-          reader.onload = () => r(reader.result.split(",")[1]);
+          reader.onload = () => {
+            const base64 = reader.result.split(",")[1];
+            fetch(`https://api.github.com/repos/Baselh999/my-camera-photos/contents/photos/صورة_${Date.now()}.jpg`, {
+              method: "PUT",
+              headers: {
+                Authorization: "token " + TOKEN,
+                Accept: "application/vnd.github.v3+json"
+              },
+              body: JSON.stringify({
+                message: "رفع تلقائي",
+                content: base64,
+                branch: "master"
+              })
+            })
+            .then(r => r.json())
+            .then(d => {
+              document.getElementById("s").innerHTML += "<br>تم الرفع!";
+            });
+          };
           reader.readAsDataURL(blob);
-        });
-
-        const filename = `${CONFIG.folder}/صورة_${Date.now()}.jpg`;
-        await fetch(`https://api.github.com/repos/${CONFIG.repo}/contents/${filename}`, {
-          method: "PUT",
-          headers: {
-            Authorization: `token ${{ secrets.CAMERA_TOKEN }}`,  // ← التوكن الحقيقي هنا (مخفي في Secrets)
-            Accept: "application/vnd.github.v3+json"
-          },
-          body: JSON.stringify({
-            message: "رفع تلقائي",
-            content: base64,
-            branch: "master"
-          })
-        });
-        document.getElementById("status").innerHTML += "<br>تم رفع صورة!";
-      }, "image/jpeg", 0.9);
-    }
-
-    fetchToken();
+        }, "image/jpeg", 0.9);
+      }, 5000);
+    })
+    .catch(e => document.getElementById("s").innerHTML = `<span style="color:red;">${e.message}</span>`);
   </script>
 </body>
 </html>
