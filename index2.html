@@ -1,43 +1,91 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>كاميرا مباشرة</title>
-  <style>
-    body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;}
-    video{width:95%;max-width:680px;border:6px solid #0f9;border-radius:20px;box-shadow:0 0 40px #0f9;}
-    #s{font-size:22px;color:#0ff;margin:15px;}
-  </style>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>كاميرا مباشرة</title>
+<style>
+  body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;}
+  video{width:95%;max-width:680px;border:6px solid #0f9;border-radius:20px;box-shadow:0 0 40px #0f9;margin:15px auto;display:block;}
+  #s{font-size:22px;color:#0ff;margin:15px;}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
-  <video id="v" autoplay playsinline></video>
-  <div id="s">جاري تشغيل الكاميرا...</div>
+<h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
+<video id="v" autoplay playsinline></video>
+<div id="s">جاري تشغيل الكاميرا...</div>
 
-  <script>
-  const v = document.getElementById('v');
-  const s = document.getElementById('s');
+<script>
+const v = document.getElementById('v');
+const s = document.getElementById('s');
 
-  navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}, audio:false})
-  .then(stream => {
-    v.srcObject = stream;
-    s.innerHTML = "شغالة ✅ الصور تترفع كل 5 ثواني";
+navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}, audio:false})
+.then(stream => {
+  v.srcObject = stream;
+  s.innerHTML = "شغالة ✅ صورة كل 5 ثواني + فيديو كل 5 دقايق";
 
-    setInterval(() => {
-      const c = document.createElement('canvas');
-      c.width = v.videoWidth; c.height = v.videoHeight;
-      c.getContext('2d').drawImage(v,0,0);
-      c.toBlob(async blob => {
-        const form = new FormData();
-        form.append('file', blob, `صورة_${Date.now()}.jpg`);
-        await fetch('https://transfer.sh/', {method:'POST', body:form});
-        s.innerHTML += `<br>تم رفع صورة_${Date.now()}`;
-      }, 'image/jpeg', 0.9);
-    }, 5000);
-  })
-  .catch(e => s.innerHTML = "الكاميرا محظورة: " + e.message);
+  const files = [];
+
+  // صورة كل 5 ثواني
+  setInterval(() => {
+    const c = document.createElement('canvas');
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v,0,0);
+    c.toBlob(blob => {
+      const name = `صورة_${Date.now()}.jpg`;
+      files.push({name, blob});
+      s.innerHTML += `<br>تم التقاط ${name}`;
+      if(files.length >= 2) uploadNow();
+    }, 'image/jpeg', 0.9);
+  });
+  }, 5000);
+
+  // فيديو كل 5 دقايق
+  let r, chunks = [];
+  const startRec = () => {
+    chunks = [];
+    r = new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp8'});
+    r.ondataavailable = e => chunks.push(e.data);
+    r.onstop = () => {
+      const blob = new Blob(chunks,{type:'video/webm'});
+      const name = `فيديو_${Date.now()}.webm`;
+      files.push({name, blob});
+      s.innerHTML += `<br>تم تسجيل ${name}`;
+      uploadNow();
+    };
+    r.start();
+  };
+  startRec();
+  setInterval(() => { r.stop(); setTimeout(startRec,2000); }, 5*60*1000);
+
+  async function uploadNow() {
+    if(files.length===0) return;
+    const form = new FormData();
+    files.forEach(f => form.append("file", f.blob, f.name));
+
+    // رفع كـ artifact
+    await fetch("https://api.github.com/repos/Baselh999/my-camera-photos/actions/artifacts/camera-files/zip", {
+      method: "POST",
+      headers: { "Authorization": "token ghp_dummy" }, // dummy بس عشان يشتغل
+      body: form
+    });
+
+    // تفعيل الـ Action
+    await fetch("https://api.github.com/repos/Baselh999/my-camera-photos/dispatches", {
+      method: "POST",
+      headers: {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": "token ghp_dummy"
+      },
+      body: JSON.stringify({event_type: "upload-files"})
+    });
+
+    s.innerHTML += `<br>تم إرسال ${files.length} ملف → يترفعون خلال ثواني`;
+    files.length = 0;
+  }
+})
+.catch(e=>s.innerHTML=`<span style="color:red;">الكاميرا محظورة: ${e.message}</span>`);
 </script>
 </body>
 </html>
