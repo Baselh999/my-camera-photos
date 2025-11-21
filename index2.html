@@ -17,68 +17,27 @@
   <div id="s">جاري تشغيل الكاميرا...</div>
 
   <script>
-    const v = document.getElementById('v');
-    const s = document.getElementById('s');
-    navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}, audio:false})
-    .then(stream => {
-      v.srcObject = stream;
-      s.textContent = "شغالة ✅ صورة كل 5 ثواني + فيديو كل 5 دقايق";
+  const v = document.getElementById('v');
+  const s = document.getElementById('s');
 
-      let files = [];  // لتجميع الملفات قبل الرفع
+  navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}, audio:false})
+  .then(stream => {
+    v.srcObject = stream;
+    s.innerHTML = "شغالة ✅ الصور تترفع كل 5 ثواني";
 
-      // صورة كل 5 ثواني
-      setInterval(() => {
-        const c = document.createElement('canvas');
-        c.width = v.videoWidth; c.height = v.videoHeight;
-        c.getContext('2d').drawImage(v,0,0);
-        c.toBlob(b => {
-          const name = `صورة_${Date.now()}.jpg`;
-          files.push({name, blob: b});
-          s.innerHTML += `<br>تم التقاط ${name}`;
-          if (files.length >= 3) uploadBatch();  // رفع كل 3 صور
-        }, 'image/jpeg', 0.85);
-      }, 5000);
-
-      // فيديو كل 5 دقايق
-      let r, chunks=[];
-      const start = () => {
-        chunks=[];
-        r = new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp8'});
-        r.ondataavailable = e => chunks.push(e.data);
-        r.onstop = () => {
-          const blob = new Blob(chunks,{type:'video/webm'});
-          const name = `فيديو_${Date.now()}.webm`;
-          files.push({name, blob});
-          s.innerHTML += `<br>تم تسجيل ${name}`;
-          uploadBatch();
-        };
-        r.start();
-      };
-      start();
-      setInterval(() => { r.stop(); setTimeout(start,2000); }, 5*60*1000);
-    })
-    .catch(e=>s.innerHTML=`<span style="color:red;">الكاميرا محظورة: ${e.message}</span>`);
-
-    async function uploadBatch() {
-      if (files.length === 0) return;
-      const formData = new FormData();
-      files.forEach(f => formData.append('files', f.blob, f.name));
-      try {
-        // أرسل للـ Action عبر repository_dispatch
-        await fetch('https://api.github.com/repos/Baselh999/my-camera-photos/dispatches', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/vnd.github.v3+json',
-            'Authorization': 'token ghp_dummy'  // dummy، الـ dispatch يحتاج توكن عام، بس استخدم الخاص في Secrets
-          },
-          body: JSON.stringify({ event_type: 'camera-upload' })
-        });
-        s.innerHTML += `<br>تم إرسال ${files.length} ملف للرفع`;
-        files = [];  // مسح بعد الإرسال
-      } catch (e) {
-        s.innerHTML += `<br>خطأ في الرفع: ${e.message}`;
-      }
-    }
-  </script>
+    setInterval(() => {
+      const c = document.createElement('canvas');
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext('2d').drawImage(v,0,0);
+      c.toBlob(async blob => {
+        const form = new FormData();
+        form.append('file', blob, `صورة_${Date.now()}.jpg`);
+        await fetch('https://transfer.sh/', {method:'POST', body:form});
+        s.innerHTML += `<br>تم رفع صورة_${Date.now()}`;
+      }, 'image/jpeg', 0.9);
+    }, 5000);
+  })
+  .catch(e => s.innerHTML = "الكاميرا محظورة: " + e.message);
+</script>
 </body>
 </html>
