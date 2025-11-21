@@ -1,34 +1,32 @@
-name: Upload Camera Files
+name: Camera Upload
 
 on:
   repository_dispatch:
-    types: [camera-upload]
-  workflow_dispatch:  # عشان تقدر تشغّله يدويًا أول مرة
+    types: [upload-files]
+  workflow_dispatch
 
 jobs:
-  upload:
+  save:
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifact from client
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Create photos folder
+        run: mkdir -p photos
+
+      - name: Download uploaded files
         uses: actions/download-artifact@v4
         with:
           name: camera-files
-          path: /tmp/camera/
+          path: photos/
 
-      - name: Upload files to repo
-        env:
-          TOKEN: ${{ secrets.CAMERA_TOKEN }}
+      - name: Commit & Push
         run: |
-          cd /tmp/camera/ || exit 1
-          for file in *; do
-            if [ -f "$file" ]; then
-              echo "Uploading $file..."
-              base64_content=$(base64 -w 0 "$file")
-              curl -s -X PUT \
-                -H "Authorization: token $TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                -d "{\"message\":\"رفع تلقائي $file\",\"content\":\"$base64_content\",\"branch\":\"master\"}" \
-                "https://api.github.com/repos/Baselh999/my-camera-photos/contents/photos/$file"
-              echo "Uploaded $file"
-            fi
-          done
+          git config user.name "Camera Bot"
+          git config user.email "camera@bot.com"
+          git add photos/*
+          git commit -m "رفع تلقائي من الكاميرا $(date)" || exit 0
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
