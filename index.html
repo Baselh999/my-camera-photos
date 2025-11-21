@@ -1,159 +1,141 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>كاميرا + رفع تلقائي على GitHub Pages</title>
-    <style>
-        body {font-family: Arial; text-align: center; background:#f0f0f0; padding:20px;}
-        video {width:90%; max-width:800px; border:5px solid #333; border-radius:15px;}
-        .msg {font-size:22px; margin:20px;}
-        .error {color:red; font-weight:bold;}
-        #photos img {width:300px; border:4px solid #333; border-radius:10px; margin:10px; box-shadow:0 4px 8px rgba(0,0,0,0.2);}
-        #counter {font-size:30px; color:#0066cc; margin:20px;}
-        .uploaded {color:green; font-weight:bold;}
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>كاميرا - رفع تلقائي</title>
+  <style>
+    body { font-family: Tajawal, Arial; text-align: center; background: #000; color: #0f0; padding: 20px; margin: 0; }
+    video, canvas { width: 90%; max-width: 640px; border: 4px solid #0f9; border-radius: 20px; margin: 15px auto; display: block; box-shadow: 0 0 20px #0f9; }
+    #status { font-size: 24px; margin: 20px; }
+    .countdown { font-size: 70px; font-weight: bold; color: #0ff; text-shadow: 0 0 15px #0ff; }
+    h1 { color: #0ff; text-shadow: 0 0 10px #0ff; }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>كاميرا + رفع تلقائي على GitHub Pages</h1>
-    <p class="msg">اسمح بالكاميرا، ثم كل شيء تلقائي!</p>
-    
-    <!-- ضع هنا التوكن والمستودع (مرة واحدة بس) -->
-    <script>
-        // <<<<<<<< غيّر الثلاث متغيّرات دول بس >>>>>>>>
-        const GITHUB_TOKEN = "ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // حط التوكن هنا
-        const REPO = "username/my-camera-photos"; // غيّر username إلى اسمك، وmy-camera-photos اسم المستودع
-        const BRANCH = "main"; // عادةً main
-        // <<<<<<<< خلصت التعديل >>>>>>>>
+  <h1>كاميرا + رفع تلقائي على GitHub</h1>
+  <p>اسمح بالكاميرا.. كل شيء تلقائي!</p>
+  
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  
+  <div id="status">جاري تشغيل الكاميرا...</div>
+  <div class="countdown" id="countdown">3</div>
 
-        const API_URL = `https://api.github.com/repos/${REPO}/contents/`;
-    </script>
+  <script>
+    // ⚙️ عدّل هنا فقط ⚙️
+    const CONFIG = {
+      repo: "Baselh999/my-camera-photos",     // غيّر إذا تريد مستودع آخر
+      folder: "photos",                       // المجلد الذي ستُرفع فيه الصور (سيُنشأ تلقائيًا)
+      interval: 5000                          // كل 5 ثوانٍ (غيّر إلى 3000 إذا تريد كل 3 ثوانٍ)
+    };
 
-    <video id="video" autoplay playsinline muted></video>
-    <div id="counter">الصورة التالية بعد: <span id="sec">3</span> ثوانٍ</div>
-    <p class="msg" id="status"></p>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const status = document.getElementById('status');
+    const countdownEl = document.getElementById('countdown');
 
-    <h2>الصور المرفوعة على GitHub Pages</h2>
-    <div id="photos"></div>
+    // جلب التوكن بطريقة آمنة (مرة واحدة فقط)
+    function getToken() {
+      let token = localStorage.getItem("github_camera_token");
+      if (!token) {
+        token = prompt("أدخل GitHub Token الخاص بك (مرة واحدة فقط):", "");
+        if (token && token.startsWith("ghp_")) {
+          localStorage.setItem("github_camera_token", token);
+          alert("تم حفظ التوكن بنجاح!");
+        } else {
+          alert("التوكن غير صحيح!");
+          return null;
+        }
+      }
+      return token;
+    }
 
-    <canvas id="canvas" style="display:none;"></canvas>
+    const TOKEN = getToken();
+    if (!TOKEN) {
+      status.innerHTML = "<span style='color:red;'>تم إلغاء العملية - التوكن مطلوب</span>";
+      throw new Error("No token");
+    }
 
-    <script>
-        (async () => {
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            const photosDiv = document.getElementById('photos');
-            const status = document.getElementById('status');
-            const counterSec = document.getElementById('sec');
+    // تشغيل الكاميرا (الكاميرا الخلفية في الموبايل)
+    navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: "environment", width: {ideal: 1280}, height: {ideal: 720} } 
+    })
+    .then(stream => {
+      video.srcObject = stream;
+      video.play();
+      status.textContent = "الكاميرا جاهزة! الصورة الأولى بعد قليل...";
+      setTimeout(startCountdown, 2000);
+    })
+    .catch(err => {
+      status.innerHTML = `<span style="color:red;">خطأ في الكاميرا:<br>${err.message}</span>`;
+    });
 
-            let countdown = 3;
+    function startCountdown() {
+      let sec = 3;
+      countdownEl.textContent = sec;
+      const timer = setInterval(() => {
+        sec--;
+        countdownEl.textContent = sec;
+        if (sec <= 0) {
+          clearInterval(timer);
+          countdownEl.textContent = "📸";
+          takeAndUpload();
+        }
+      }, 1000);
+    }
 
-            // دالة رفع ملف إلى GitHub
-            const uploadToGitHub = async (blob, filename) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                return new Promise((resolve) => {
-                    reader.onloadend = async () => {
-                        const base64 = reader.result.split(',')[1];
-                        const path = filename;
+    async function takeAndUpload() {
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      ctx.drawImage(video, 0, 0);
 
-                        try {
-                            // جلب SHA إذا الملف موجود (للتحديث)
-                            let sha = null;
-                            try {
-                                const existing = await fetch(API_URL + path, {
-                                    headers: { Authorization: `token ${GITHUB_TOKEN}` }
-                                });
-                                if (existing.ok) {
-                                    const data = await existing.json();
-                                    sha = data.sha;
-                                }
-                            } catch (e) {}
+      canvas.toBlob(async blob => {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const filename = `${CONFIG.folder}/صورة_${timestamp}.jpg`;
 
-                            const response = await fetch(API_URL + path, {
-                                method: 'PUT',
-                                headers: {
-                                    Authorization: `token ${GITHUB_TOKEN}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    message: `Upload ${filename} via camera`,
-                                    content: base64,
-                                    branch: BRANCH,
-                                    sha: sha
-                                })
-                            });
+        const base64 = await blobToBase64(blob);
 
-                            if (response.ok) {
-                                const data = await response.json();
-                                const rawUrl = data.content.download_url || `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${filename}`;
-                                resolve(rawUrl);
-                            } else {
-                                throw new Error("فشل الرفع");
-                            }
-                        } catch (err) {
-                            console.error(err);
-                            resolve(null);
-                        }
-                    };
-                });
-            };
+        try {
+          const response = await fetch(`https://api.github.com/repos/${CONFIG.repo}/contents/${filename}`, {
+            method: "PUT",
+            headers: {
+              Authorization: `token ${TOKEN}`,
+              Accept: "application/vnd.github.v3+json"
+            },
+            body: JSON.stringify({
+              message: `رفع تلقائي ${timestamp}`,
+              content: base64,
+              branch: "main"
+            })
+          });
 
-            try {
-                status.textContent = "جاري طلب الإذن...";
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" } 
-                });
-                video.srcObject = stream;
-                status.innerHTML = "الكاميرا تعمل! ستبدأ الرفع التلقائي على GitHub...";
-                status.style.color = "green";
+          const data = await response.json();
 
-                video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
+          if (data.content && data.content.html_url) {
+            status.innerHTML = `تم الرفع بنجاح! 
+              <br><a href="${data.content.html_url}" target="_blank" style="color:#0ff;">عرض الصورة</a>`;
+          } else {
+            status.innerHTML = `<span style="color:orange;">فشل الرفع: ${data.message || "خطأ غير معروف"}</span>`;
+          }
+        } catch (err) {
+          status.innerHTML = `<span style="color:red;">خطأ في الاتصال: ${err.message}</span>`;
+        }
 
-                    // رفع صورة كل 3 ثوانٍ
-                    const takePhoto = async () => {
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        canvas.toBlob(async (blob) => {
-                            const filename = "photo_" + Date.now() + ".jpg";
-                            const url = await uploadToGitHub(blob, filename);
-                            if (url) {
-                                const img = document.createElement('img');
-                                img.src = url + "?t=" + Date.now(); // عشان يحدّث الكاش
-                                img.title = "مرفوعة: " + new Date().toLocaleTimeString('ar-EG');
-                                photosDiv.prepend(img);
-                            } else {
-                                status.innerHTML += "<br>فشل رفع صورة";
-                            }
-                        }, 'image/jpeg', 0.9);
+        // التقاط الصورة التالية
+        setTimeout(startCountdown, 3000);
+      }, "image/jpeg", 0.9);
+    }
 
-                        countdown = 3;
-                        counterSec.textContent = countdown;
-                    };
-
-                    setInterval(() => {
-                        countdown--;
-                        counterSec.textContent = countdown;
-                        if (countdown <= 0) takePhoto();
-                    }, 1000);
-
-                    setTimeout(takePhoto, 3000);
-                };
-
-            } catch (err) {
-                status.textContent = "فشل تشغيل الكاميرا 😔";
-                status.classList.add("error");
-                console.error(err);
-            }
-
-            window.addEventListener('beforeunload', () => {
-                if (video.srcObject) {
-                    video.srcObject.getTracks().forEach(t => t.stop());
-                }
-            });
-        })();
-    </script>
+    function blobToBase64(blob) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(blob);
+      });
+    }
+  </script>
 </body>
 </html>
