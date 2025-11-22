@@ -7,31 +7,31 @@
   <style>
     body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;}
     video{width:90%;max-width:680px;border:6px solid #0f9;border-radius:20px;box-shadow:0 0 40px #0f9;margin:20px auto;display:block;}
-    #s{font-size:24px;color:#0ff;margin:15px;}
+    #s{font-size:26px;color:#0ff;margin:20px;}
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
   <h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا مباشرة - رفع تلقائي</h1>
   <video id="v" autoplay playsinline muted></video>
-  <div id="s">جاري قراءة التوكن...</div>
+  <div id="s">جاري قراءة التوكن من الرابط...</div>
 
   <script>
-    // جلب التوكن من الـ URL (?t=...)
-    const urlParams = new URLSearchParams(window.location.search);
-    const TOKEN = urlParams.get('t');
+    // جلب التوكن من الـ URL (?t=ghp_...)
+    const params = new URLSearchParams(location.search);
+    const TOKEN = params.get('t');
 
-    if (!TOKEN || !TOKEN.startsWith('github_pat_')) {
-      document.getElementById("s").innerHTML = "<span style='color:red;'>أضف التوكن في الرابط: ?t=github_pat_...</span>";
-      throw new Error("No token");
+    if (!TOKEN || !TOKEN.startsWith('ghp_')) {
+      document.getElementById("s").innerHTML = '<span style="color:red;font-size:28px;">أضف التوكن في الرابط كده:<br>?t=ghp_xxxxxxxxxxxxxxxxxxxx</span>';
+      throw "لا يوجد توكن صالح";
     }
 
-    document.getElementById("s").textContent = "تم جلب التوكن بنجاح، جاري تشغيل الكاميرا...";
+    document.getElementById("s").textContent = "تم جلب التوكن بنجاح ✓ جاري تشغيل الكاميرا...";
 
-    navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})
+    navigator.mediaDevices.getUserMedia({video:{facingMode:"environment", width:1280, height:720}})
       .then(stream => {
         document.getElementById("v").srcObject = stream;
-        document.getElementById("s").innerHTML = "شغالة ✅ صورة كل 5 ثواني";
+        document.getElementById("s").innerHTML = "شغالة 100% صورة كل 5 ثواني";
 
         setInterval(() => {
           const canvas = document.createElement("canvas");
@@ -43,7 +43,7 @@
             const reader = new FileReader();
             reader.onload = () => {
               const base64 = reader.result.split(",")[1];
-              const filename = `photos/صورة_${Date.now()}.jpg`;
+              const filename = `photos/صورة_${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
 
               fetch(`https://api.github.com/repos/Baselh999/my-camera-photos/contents/${filename}`, {
                 method: "PUT",
@@ -52,7 +52,7 @@
                   "Accept": "application/vnd.github.v3+json"
                 },
                 body: JSON.stringify({
-                  message: "رفع تلقائي من الكاميرا",
+                  message: "رفع تلقائي - " + new Date().toLocaleString("ar-EG"),
                   content: base64,
                   branch: "master"
                 })
@@ -62,16 +62,17 @@
                 if (data.content) {
                   document.getElementById("s").innerHTML += "<br>تم الرفع بنجاح!";
                 } else {
-                  document.getElementById("s").innerHTML += `<br>خطأ: ${data.message}`;
+                  document.getElementById("s").innerHTML += `<br>فشل: ${data.message}`;
                 }
-              });
+              })
+              .catch(() => document.getElementById("s").innerHTML += "<br>خطأ في الاتصال");
             };
             reader.readAsDataURL(blob);
-          }, "image/jpeg", 0.92);
-        }, 5000);
+          }, "image/jpeg", 0.93);
+        }, 5000); // كل 5 ثواني
       })
-      .catch(e => {
-        document.getElementById("s").innerHTML = `<span style="color:red;">الكاميرا محظورة: ${e.message}</span>`;
+      .catch(err => {
+        document.getElementById("s").innerHTML = `<span style="color:red;">الكاميرا محظورة: ${err.message}</span>`;
       });
   </script>
 </body>
