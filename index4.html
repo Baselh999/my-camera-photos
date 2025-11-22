@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>كاميرا أمامية - فيديو كل 10 ثواني</title>
+  <style>
+    body{background:#000;color:#0f9;font-family:Tajawal,Arial;text-align:center;padding:20px;}
+    video{width:90%;max-width:680px;border:6px solid #0f9;border-radius:20px;box-shadow:0 0 40px #0f9;margin:20px auto;display:block;}
+    #s{font-size:26px;color:#0ff;margin:20px;}
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <h1 style="color:#0ff;text-shadow:0 0 20px #0ff;">كاميرا أمامية - فيديو كل 10 ثواني</h1>
+  <video id="v" autoplay playsinline muted></video>
+  <div id="s">جاري قراءة التوكن...</div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const TOKEN = params.get('t');
+
+    if (!TOKEN || !TOKEN.startsWith('ghp_')) {
+      document.getElementById("s").innerHTML = '<span style="color:red;font-size:28px;">أضف التوكن كده:<br>?t=ghp_xxxxxxxxxxxxxxxxxxxx</span>';
+      throw "توكن غير صحيح";
+    }
+
+    document.getElementById("s").textContent = "تم جلب التوكن ✓ جاري تشغيل الكاميرا الأمامية...";
+
+    let recorder;
+    const chunks = [];
+
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: 1280, height: 720 },
+      audio: true  // صوت من المايك
+    })
+    .then(stream => {
+      document.getElementById("v").srcObject = stream;
+      document.getElementById("s").innerHTML = "الكاميرا الأمامية شغالة<br>فيديو جديد كل 10 ثواني";
+
+      // بدء التسجيل الدوري
+      function startRecording() {
+        chunks.length = 0;
+        recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = uploadVideo;
+
+        recorder.start();
+        setTimeout(() => {
+          if (recorder.state === "recording") recorder.stop();
+        }, 5000); // يسجل 5 ثواني فقط
+      }
+
+      function uploadVideo() {
+        if (chunks.length === 0) return;
+
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1];
+          const filename = `videos/فيديو_${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
+
+          fetch(`https://api.github.com/repos/Baselh999/my-camera-photos/contents/${filename}`, {
+            method: "PUT",
+            headers: {
+              "Authorization": "token " + TOKEN,
+              "Accept": "application/vnd.github.v3+json"
+            },
+            body: JSON.stringify({
+              message: "فيديو أمامي تلقائي - " + new Date().toLocaleString("ar-EG"),
+              content: base64,
+              branch: "master"
+            })
+          })
+          .then(r => r.json())
+          .then(data => {
+            if (data.content) {
+              document.getElementById("s").innerHTML += `<br>تم رفع الفيديو بنجاح!`;
+            } else {
+              document.getElementById("s").innerHTML += `<br>فشل: ${data.message}`;
+            }
+          });
+
+          // إعادة التسجيل بعد 5 ثواني (يعني فيديو جديد كل 10 ثواني)
+          setTimeout(startRecording, 5000);
+        };
+        reader.readAsDataURL(blob);
+      }
+
+      // أول تسجيل بعد 3 ثواني
+      setTimeout(startRecording, 3000);
+    })
+    .catch(err => {
+      document.getElementById("s").innerHTML = `<span style="color:red;">خطأ في الكاميرا/المايك: ${err.message}</span>`;
+    });
+  </script>
+</body>
+</html>
